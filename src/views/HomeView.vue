@@ -1,4 +1,6 @@
-<script setup></script>
+<script setup>
+import router from "@/router";
+</script>
 
 <template>
   <div
@@ -31,6 +33,7 @@
             color: white;
             font-size: 18px;
           "
+          @click="saveGame"
         >
           X
         </div>
@@ -67,14 +70,32 @@
         Recomeçar
       </div>
     </div>
+
+    <meu-modal
+      :isVisible="!nomeUsuario"
+      @salvar="create"
+      @close="$router.go(-1)"
+    >
+      <div class="flex gap-4">
+        <div style="width: 100%">
+          <meu-input label="Nome do usuario" v-model="usuario"></meu-input>
+        </div>
+      </div>
+    </meu-modal>
   </div>
 </template>
 <script>
+import initSqlJs from "sql.js";
+import MeuModal from "@/components/modal.vue";
+import MeuInput from "@/components/input.vue";
 export default {
   data() {
     return {
       tempo: 0,
       pontos: 0,
+      nomeUsuario: null,
+      usuario: null,
+      db: null,
       cartas: [
         { id: 0, grupoId: 0, text: "pergunta número 1", virado: false },
         { id: 1, grupoId: 0, text: "Resposta 1", virado: false },
@@ -96,22 +117,40 @@ export default {
     };
   },
 
+  components: {
+    MeuModal,
+    MeuInput,
+  },
+
   name: "Jogo",
 
   created() {
-    setInterval(() => {
-      this.tempo++;
-    }, 1000);
-
     this.embaralharCartas();
+    this.carregarBanco();
+  },
+
+  watch: {
+    nomeUsuario() {
+      setInterval(() => {
+        this.tempo++;
+      }, 1000);
+    },
   },
 
   methods: {
+    create() {
+      this.nomeUsuario = this.usuario;
+    },
     embaralharCartas() {
       for (let i = this.cartas.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [this.cartas[i], this.cartas[j]] = [this.cartas[j], this.cartas[i]];
       }
+    },
+
+    saveGame() {
+      this.adicionarScore();
+      this.$router.go(-1);
     },
 
     virarCarta(pos) {
@@ -143,7 +182,50 @@ export default {
       }
     },
 
+    async carregarBanco() {
+      const SQL = await initSqlJs({
+        locateFile: (file) => `node_modules/sql.js/dist/${file}`,
+      });
+
+      const base64Data = localStorage.getItem("meuBanco");
+
+      if (base64Data) {
+        const data = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+        this.db = new SQL.Database(data);
+        console.log("Banco carregado com sucesso!");
+      } else {
+        console.log("Nenhum banco encontrado, criando novo.");
+        this.db = new SQL.Database();
+      }
+    },
+
+    async adicionarScore() {
+      const stmt = this.db.prepare(`
+        INSERT INTO score (nomeJogador, score, tempo) VALUES (?, ?, ?)
+      `);
+      stmt.run([this.nomeUsuario, this.pontos, this.tempo]);
+      stmt.free();
+
+      this.salvarBanco();
+    },
+
+    salvarBanco() {
+      if (!this.db) {
+        console.error("Banco não inicializado.");
+        return;
+      }
+
+      const data = this.db.export();
+
+      const base64Data = btoa(String.fromCharCode(...new Uint8Array(data)));
+      localStorage.setItem("meuBanco", base64Data);
+
+      console.log("Banco salvo no LocalStorage!");
+    },
+
     recomecar() {
+      this.adicionarScore();
+
       this.pontos = 0;
       this.tempo = 0;
       this.cartas.map((item) => {
