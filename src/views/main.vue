@@ -35,6 +35,7 @@
           <th style="padding: 10px; border: 1px solid #ddd">Nome</th>
           <th style="padding: 10px; border: 1px solid #ddd">Score</th>
           <th style="padding: 10px; border: 1px solid #ddd">Tempo</th>
+          <th style="padding: 10px; border: 1px solid #ddd">dificuldade</th>
           <p
             class="cursor-pointer"
             style="position: absolute; margin-left: -19px"
@@ -53,6 +54,9 @@
           <td style="padding: 10px; border: 1px solid #ddd">{{ item[0] }}</td>
           <td style="padding: 10px; border: 1px solid #ddd">{{ item[1] }}</td>
           <td style="padding: 10px; border: 1px solid #ddd">{{ item[2] }}</td>
+          <td style="padding: 10px; border: 1px solid #ddd">
+            {{ item[3] === 0 ? "Fácil" : item[3] === 1 ? "Médio" : "Difícil" }}
+          </td>
         </tr>
       </tbody>
     </table>
@@ -60,6 +64,7 @@
 </template>
 <script>
 import initSqlJs from "sql.js";
+import { perguntas } from "@/components/perguntas";
 export default {
   data() {
     return {
@@ -77,9 +82,12 @@ export default {
       CREATE TABLE IF NOT EXISTS score (
           nomeJogador TEXT,
           score INTEGER,
-          tempo INTEGER 
+          tempo INTEGER ,
+          dificuldade INTEGER
       );
   `);
+
+    await this.inicializarPerguntas();
 
     this.salvarBanco();
   },
@@ -123,6 +131,39 @@ export default {
       localStorage.setItem("meuBanco", base64Data);
 
       console.log("Banco salvo no LocalStorage!");
+    },
+
+    async inicializarPerguntas() {
+      try {
+        await this.db.run(`
+            CREATE TABLE IF NOT EXISTS cards (
+                id INTEGER PRIMARY KEY,
+                grupoId INTEGER,
+                text TEXT,
+                virado BOOLEAN
+            );
+        `);
+
+        const countResult = await this.db.exec(
+          `SELECT COUNT(*) AS count FROM cards`
+        );
+
+        if (countResult[0]?.values[0][0] === 0) {
+          const insertStmt = `
+                INSERT INTO cards (id, grupoId, text, virado)
+                VALUES (?, ?, ?, ?);
+            `;
+          for (const { id, grupoId, text, virado } of perguntas) {
+            await this.db.run(insertStmt, [id, grupoId, text, virado]);
+          }
+
+          console.log("Dados inseridos na tabela.");
+        } else {
+          console.log("A tabela já contém dados. Nenhuma inserção necessária.");
+        }
+      } catch (error) {
+        console.error("Erro ao inicializar perguntas:", error);
+      }
     },
   },
 };

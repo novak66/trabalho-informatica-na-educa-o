@@ -40,22 +40,40 @@ import router from "@/router";
       </div>
     </div>
     <div
-      class="flex justify-between flex-wrap p-10"
-      style="min-height: 70%; background-color: rgb(217, 217, 217)"
+      class="flex justify-center"
+      style="width: 100%; min-height: 70%; background-color: black"
     >
       <div
-        v-for="(c, index) in cartas"
-        :key="c.id"
-        class="bg-black w-1/12 flex items-center justify-center p-5"
-        style="min-height: 70px; margin: 10px 35px 35px 10px"
-        :class="['card', { 'is-flipped': c.virado }]"
-        :style="{ cursor: c.virado ? 'default' : 'pointer' }"
-        @click="virarCarta(index)"
+        class="flex justify-between flex-wrap p-10 text-center"
+        style="min-height: 100%; background-color: rgb(217, 217, 217)"
+        :style="{
+          width: dificuldade == 2 ? '100%' : dificuldade === 1 ? '70%' : '50%',
+        }"
       >
-        <p v-if="c.virado" class="p-5 card-face card-back text-white">
-          {{ c.text }}
-        </p>
-        <p></p>
+        <div
+          v-for="(c, index) in cartas"
+          :key="c.id"
+          class="bg-black flex items-center justify-center p-5"
+          style="min-height: 70px; margin: 10px 35px 35px 10px"
+          :class="['card', { 'is-flipped': c.virado }]"
+          :style="{
+            cursor: c.virado ? 'default' : 'pointer',
+            width: dificuldade === 2 ? '8%' : dificuldade === 1 ? '11%' : '15%',
+          }"
+          @click="virarCarta(index)"
+        >
+          <p
+            v-if="c.virado"
+            style="font-size: 10px"
+            class="p-5 card-face card-back text-white"
+          >
+            {{ c.text }}
+          </p>
+          <p v-else class="p-5 text-white">
+            {{ c.grupoId }}
+          </p>
+          <p></p>
+        </div>
       </div>
     </div>
     <div
@@ -76,9 +94,20 @@ import router from "@/router";
       @salvar="create"
       @close="$router.go(-1)"
     >
-      <div class="flex gap-4">
+      <div class="flex flex-col gap-4">
         <div style="width: 100%">
           <meu-input label="Nome do usuario" v-model="usuario"></meu-input>
+        </div>
+        <div class="flex justify-between">
+          <label>
+            <input type="radio" :value="0" v-model="dificuldade" /> Fácil
+          </label>
+          <label>
+            <input type="radio" :value="1" v-model="dificuldade" /> Médio
+          </label>
+          <label>
+            <input type="radio" :value="2" v-model="dificuldade" /> Difícil
+          </label>
         </div>
       </div>
     </meu-modal>
@@ -94,26 +123,10 @@ export default {
       tempo: 0,
       pontos: 0,
       nomeUsuario: null,
-      usuario: null,
+      usuario: "asd",
+      dificuldade: 0,
       db: null,
-      cartas: [
-        { id: 0, grupoId: 0, text: "pergunta número 1", virado: false },
-        { id: 1, grupoId: 0, text: "Resposta 1", virado: false },
-        { id: 2, grupoId: 1, text: "pergunta número 2", virado: false },
-        { id: 3, grupoId: 1, text: "Resposta 2", virado: false },
-        { id: 4, grupoId: 2, text: "pergunta número 3", virado: false },
-        { id: 5, grupoId: 2, text: "Resposta 3", virado: false },
-        { id: 6, grupoId: 3, text: "pergunta número 4", virado: false },
-        { id: 7, grupoId: 3, text: "Resposta 4", virado: false },
-        { id: 8, grupoId: 4, text: "pergunta número 5", virado: false },
-        { id: 9, grupoId: 4, text: "Resposta 5", virado: false },
-        { id: 10, grupoId: 5, text: "pergunta número 6", virado: false },
-        { id: 11, grupoId: 5, text: "Resposta 6", virado: false },
-        { id: 12, grupoId: 6, text: "pergunta número 7", virado: false },
-        { id: 13, grupoId: 6, text: "Resposta 7", virado: false },
-        { id: 14, grupoId: 7, text: "pergunta número 8", virado: false },
-        { id: 15, grupoId: 7, text: "Resposta 8", virado: false },
-      ],
+      cartas: [],
     };
   },
 
@@ -124,9 +137,9 @@ export default {
 
   name: "Jogo",
 
-  created() {
+  async created() {
+    await this.carregarBanco();
     this.embaralharCartas();
-    this.carregarBanco();
   },
 
   watch: {
@@ -135,12 +148,19 @@ export default {
         this.tempo++;
       }, 1000);
     },
+
+    async dificuldade() {
+      this.cartas = [];
+      await this.carregarBanco();
+      this.embaralharCartas();
+    },
   },
 
   methods: {
     create() {
       this.nomeUsuario = this.usuario;
     },
+
     embaralharCartas() {
       for (let i = this.cartas.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -197,13 +217,43 @@ export default {
         console.log("Nenhum banco encontrado, criando novo.");
         this.db = new SQL.Database();
       }
+
+      const allRands = [];
+      const tamanho =
+        this.dificuldade === 2 ? 8 : this.dificuldade === 1 ? 6 : 4;
+      for (let i = 0; i < tamanho; i++) {
+        let rand = Math.floor(Math.random() * 23);
+
+        while (allRands.includes(rand)) {
+          rand = Math.floor(Math.random() * 23);
+        }
+
+        allRands.push(rand);
+
+        const query = `SELECT * FROM cards WHERE grupoId = ?`;
+        const stmt = this.db.prepare(query);
+
+        stmt.bind([rand]);
+
+        const results = [];
+
+        while (stmt.step()) {
+          results.push(stmt.getAsObject());
+        }
+
+        stmt.free();
+
+        if (results.length > 0) {
+          this.cartas.push(...results);
+        }
+      }
     },
 
     async adicionarScore() {
       const stmt = this.db.prepare(`
-        INSERT INTO score (nomeJogador, score, tempo) VALUES (?, ?, ?)
+        INSERT INTO score (nomeJogador, score, tempo, dificuldade) VALUES (?, ?, ?, ?)
       `);
-      stmt.run([this.nomeUsuario, this.pontos, this.tempo]);
+      stmt.run([this.nomeUsuario, this.pontos, this.tempo, this.dificuldade]);
       stmt.free();
 
       this.salvarBanco();
@@ -211,7 +261,6 @@ export default {
 
     salvarBanco() {
       if (!this.db) {
-        console.error("Banco não inicializado.");
         return;
       }
 
@@ -219,8 +268,6 @@ export default {
 
       const base64Data = btoa(String.fromCharCode(...new Uint8Array(data)));
       localStorage.setItem("meuBanco", base64Data);
-
-      console.log("Banco salvo no LocalStorage!");
     },
 
     recomecar() {
